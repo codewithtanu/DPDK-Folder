@@ -1,0 +1,72 @@
+RX Node1 has been Registered
+RX Node2 has been Registered
+IPV4 Node has been Registered
+TX Node has been Registered
+Drop Node has been Registered
+Inside the Main Function  with  lcore id :0
+DPDK Graph running (Ctrl+C to quit)
+Inside the RX_NODE1 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 1 and DROP Packet 0
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE2 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 0 and DROP Packet 1
+Inside the DROP_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE1 Process Node Got 2 Packets 
+Inside the IPV4 Process Node Got 2 Packets
+TX Packet 1 and DROP Packet 1
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Inside the DROP_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE1 Process Node Got 2 Packets 
+Inside the IPV4 Process Node Got 2 Packets
+TX Packet 2 and DROP Packet 0
+Inside the TX_NODE Process Node Got 2 Packets
+
+
+Inside the RX_NODE2 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 1 and DROP Packet 0
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE2 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 1 and DROP Packet 0
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE2 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 1 and DROP Packet 0
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE1 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 1 and DROP Packet 0
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE1 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 1 and DROP Packet 0
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Inside the RX_NODE2 Process Node Got 1 Packets 
+Inside the IPV4 Process Node Got 1 Packets
+TX Packet 1 and DROP Packet 0
+Inside the TX_NODE Process Node Got 1 Packets
+
+
+Forcefully Signal Has Been Raised: 2
+Exited cleanly
