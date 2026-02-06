@@ -1,3 +1,4 @@
+#include <rte_reorder.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -11,6 +12,8 @@
 
 int main(int argc, char **argv)
 {
+    struct rte_reorder_buffer *x;
+    
     if (rte_eal_init(argc, argv) < 0)
         rte_panic("EAL init failed\n");
 
