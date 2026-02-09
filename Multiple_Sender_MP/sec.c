@@ -98,7 +98,6 @@ int main(int argc, char **argv)
             printf("  └─ Reply %d: %s\n", j, (char *)reply.msgs[j].param);
         }
 
-        /* Safe free with NULL check */
         if (reply.msgs != NULL && reply.nb_received > 0) {
             free(reply.msgs);
             reply.msgs = NULL;
@@ -109,10 +108,8 @@ int main(int argc, char **argv)
 
     printf("\n[SECONDARY-%d] All requests completed. Cleaning up...\n", sender_id);
     
-    /* Allow time for pending operations */
     sleep(1);
-    
-    /* Unregister any actions (if registered) */
+  
     rte_mp_action_unregister(MSG_NAME);
     
     printf("[SECONDARY-%d] Exiting cleanly.\n", sender_id);
