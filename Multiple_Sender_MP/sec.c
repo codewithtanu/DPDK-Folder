@@ -5,15 +5,31 @@
 #include <stdlib.h>
 #include <time.h>
 #include <rte_lcore.h>
+#include <signal.h>
 
 #define MSG_NAME "get_stats"
 #define MAX_RETRIES 3
 
+/* Signal handler for clean exit */
+static volatile int force_quit = 0;
+
+static void
+signal_handler(int signum)
+{
+    if (signum == SIGINT || signum == SIGTERM) {
+        printf("\n\nSignal %d received, preparing to exit...\n", signum);
+        force_quit = 1;
+    }
+}
+
 int main(int argc, char **argv)
 {
-    /* Add a small random delay before initialization to avoid race conditions */
     srand(time(NULL) ^ getpid());
-    usleep((rand() % 500) * 1000); // 0-500ms delay
+    usleep((rand() % 500) * 1000);
+
+    /* Install signal handlers */
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     int ret = rte_eal_init(argc, argv);
     if (ret < 0) {
@@ -21,34 +37,28 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Generate unique sender ID based on process ID */
     int sender_id = getpid() % 1000;
-    
-    /* Get the lcore this process is running on */
     unsigned lcore_id = rte_lcore_id();
     
     printf("==============================================\n");
     printf("[SECONDARY-%d] Started on lcore %u\n", sender_id, lcore_id);
     printf("==============================================\n");
 
-    /* Wait a bit for primary to be fully ready */
     sleep(1);
 
-    /* Send multiple requests with delays */
-    for (int i = 1; i <= 3; i++) {
+    for (int i = 1; i <= 3 && !force_quit; i++) {
         printf("\n[SECONDARY-%d] Sending request #%d to primary...\n", 
                sender_id, i);
 
         struct rte_mp_msg msg;
         struct rte_mp_reply reply;
-        struct timespec ts = {.tv_sec = 10, .tv_nsec = 0}; // Increased timeout
+        struct timespec ts = {.tv_sec = 10, .tv_nsec = 0};
 
         memset(&msg, 0, sizeof(msg));
         memset(&reply, 0, sizeof(reply));
 
         snprintf(msg.name, sizeof(msg.name), "%s", MSG_NAME);
         
-        /* Include sender ID and lcore in the payload */
         char payload[256];
         snprintf(payload, sizeof(payload), 
                  "Request from SECONDARY-%d (lcore %u), iteration %d", 
@@ -56,11 +66,10 @@ int main(int argc, char **argv)
         msg.len_param = strlen(payload) + 1;
         memcpy(msg.param, payload, msg.len_param);
 
-        /* Retry logic for sending request */
         int retry = 0;
         int success = 0;
         
-        while (retry < MAX_RETRIES && !success) {
+        while (retry < MAX_RETRIES && !success && !force_quit) {
             if (retry > 0) {
                 printf("[SECONDARY-%d] Retry attempt %d/%d...\n", 
                        sender_id, retry, MAX_RETRIES);
@@ -89,18 +98,25 @@ int main(int argc, char **argv)
             printf("  └─ Reply %d: %s\n", j, (char *)reply.msgs[j].param);
         }
 
-        if (reply.msgs)
+        /* Safe free with NULL check */
+        if (reply.msgs != NULL && reply.nb_received > 0) {
             free(reply.msgs);
+            reply.msgs = NULL;
+        }
 
-        /* Random delay between requests (1-3 seconds) */
-        sleep(5);
+        sleep(1 + (rand() % 3));
     }
 
-    printf("\n[SECONDARY-%d] All requests completed. Exiting.\n", sender_id);
+    printf("\n[SECONDARY-%d] All requests completed. Cleaning up...\n", sender_id);
+    
+    /* Allow time for pending operations */
+    sleep(1);
+    
+    /* Unregister any actions (if registered) */
+    rte_mp_action_unregister(MSG_NAME);
+    
+    printf("[SECONDARY-%d] Exiting cleanly.\n", sender_id);
     printf("==============================================\n");
-
-    /* Clean shutdown */
-    rte_eal_cleanup();
 
     return 0;
 }
