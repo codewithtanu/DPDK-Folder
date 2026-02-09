@@ -13,17 +13,17 @@
 #define REORDER_SIZE 16
 #define BURST 32
 
-/* Global offset for reorder sequence number dynamic field */
+
 int rte_reorder_seqn_dynfield_offset = -1;
 
-/* Macro to access the sequence number field */
 #define REORDER_SEQN(mbuf) \
     (*RTE_MBUF_DYNFIELD((mbuf), rte_reorder_seqn_dynfield_offset, uint32_t *))
 
-/* Store sequence number in packet data */
+
 static struct rte_mbuf *create_packet(struct rte_mempool *mp, uint32_t seq)
 {
     struct rte_mbuf *m = rte_pktmbuf_alloc(mp);
+
     if (!m)
         return NULL;
 
@@ -33,7 +33,6 @@ static struct rte_mbuf *create_packet(struct rte_mempool *mp, uint32_t seq)
     m->data_len = sizeof(uint32_t);
     m->pkt_len  = sizeof(uint32_t);
     
-    /* Set the reorder sequence number using dynamic field */
     REORDER_SEQN(m) = seq;
 
     return m;
@@ -59,23 +58,22 @@ int main(int argc, char **argv)
     if (!mbuf_pool)
         rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
 
-    /* Look up the reorder sequence number dynamic field offset */
+   
     rte_reorder_seqn_dynfield_offset = 
         rte_mbuf_dynfield_lookup("rte_reorder_seqn_dynfield", NULL);
-    
+
     if (rte_reorder_seqn_dynfield_offset < 0) {
-        /* If not found, it will be registered by rte_reorder_create() */
         printf("Reorder seqn dynfield not yet registered (will be auto-registered)\n");
     }
 
     reorder_buf = rte_reorder_create("REORDER_BUF",
                                      rte_socket_id(),
-                                     REORDER_SIZE);
+                                     REORDER_SIZE);                           
                                      
     if (!reorder_buf)
         rte_exit(EXIT_FAILURE, "Cannot create reorder buffer\n");
 
-    /* Look up again after reorder buffer creation */
+
     if (rte_reorder_seqn_dynfield_offset < 0) {
         rte_reorder_seqn_dynfield_offset = 
             rte_mbuf_dynfield_lookup("rte_reorder_seqn_dynfield", NULL);

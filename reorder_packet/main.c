@@ -28,7 +28,6 @@ static struct rte_mbuf *create_packet(struct rte_mempool *mp, uint32_t seq)
 
     uint32_t *data = rte_pktmbuf_mtod(m, uint32_t *);
     *data = seq;
-
     m->data_len = sizeof(uint32_t);
     m->pkt_len  = sizeof(uint32_t);
     

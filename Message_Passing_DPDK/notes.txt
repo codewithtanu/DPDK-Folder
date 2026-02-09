@@ -1,0 +1,56 @@
+rte_mp_action_register()
+        ↓
+DPDK stores (name → callback)
+        ↓
+Secondary rte_mp_sendmsg()
+        ↓
+Unix socket delivers message
+        ↓
+Primary MP thread recv()
+        ↓
+DPDK matches name in action table
+        ↓
+mp_callback() executes
+        ↓
+rte_mp_reply() sends response
+        ↓
+Secondary MP thread recv()
+        ↓
+secondary callback executes
+
+
+Secondary → rte_mp_sendmsg("get_stats")
+        ↓
+Primary MP thread receives socket message
+        ↓
+DPDK finds registered action
+        ↓
+mp_callback() executes   ← THIS FUNCTION
+        ↓
+Creates reply with stats
+        ↓
+rte_mp_reply() sends response
+        ↓
+Secondary callback prints stats
+
+
+1. Serialize msg
+2. sendmsg() to mp socket
+3. BLOCK current thread
+4. wait for reply messages
+5. collect replies into reply struct
+6. return to caller
+
+So:
+    No callback needed
+    because function itself waits and gathers replies.
+
+This secondary program demonstrates synchronous inter-process communication in DPDK using rte_mp_request_sync().
+It sends an rte_mp request to the primary process, blocks until replies are received or timeout occurs, stores
+the responses in an rte_mp_reply structure, prints them, and exits.Unlike the asynchronous model, 
+no callback is required because the function itself waits for the response.
+
+rte_mp_request_sync() collects replies from all responding DPDK processes during the wait period.
+Each received reply is stored in the msgs[] array of the rte_mp_reply structure, and nb_received 
+tracks the total number of replies.Replies may come from multiple processes or multiple times from 
+the same process, and collection continues until the timeout expires or the reply buffer limit is reached.

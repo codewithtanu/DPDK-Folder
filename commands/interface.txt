@@ -1,0 +1,28 @@
+sudo ip link add veth0 type veth peer veth1
+
+sudo ip link set veth0 up
+sudo ip link set veth1 up
+
+sudo ip addr add 10.0.0.1/24 dev veth0
+sudo ip addr add 10.0.0.2/24 dev veth1
+
+ping -I veth0 10.0.0.2
+
+sudo tcpdump -i veth0 -e
+
+sudo ip addr flush dev veth0
+sudo ip addr flush dev veth1
+
+sudo ip link set veth0 promisc on
+sudo ip link set veth1 promisc on
+
+sudo apt update
+sudo apt install -y iputils-arping
+
+sudo arping -I veth0 10.0.0.2
+
+sudo ./l2fwd -l 0-1 -n 4 --no-huge \
+  --vdev=net_af_packet0,iface=veth0 \
+  --vdev=net_af_packet1,iface=veth1
+
+sudo ip link delete veth0

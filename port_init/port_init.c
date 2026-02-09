@@ -1,3 +1,4 @@
+#include <rte_ether.h>
 #include <stdio.h>
 
 #include <rte_eal.h>
@@ -24,7 +25,9 @@
 
 
 static int port_init(uint16_t port_id,struct rte_mempool* m_pool){
-   struct rte_eth_conf port_conf={0};
+   struct rte_eth_conf port_conf={
+    .rxmode={.max_lro_pkt_size=RTE_ETHER_MAX_LEN}
+   };
    const uint16_t rx_queue=1;
    const uint16_t tx_queue=1;
    int retval;
