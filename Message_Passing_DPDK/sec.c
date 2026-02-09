@@ -13,20 +13,19 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("[SECONDARY] Sending request to primary...\n");
+    printf("[SECONDARY-%d] Sending request to primary...\n",getpid());
 
     struct rte_mp_msg msg;
     struct rte_mp_reply reply;
-    struct timespec ts = {.tv_sec = 5, .tv_nsec = 0}; // 5 second timeout
+    struct timespec ts = {.tv_sec = 5, .tv_nsec = 0}; 
 
     memset(&msg, 0, sizeof(msg));
     memset(&reply, 0, sizeof(reply));
 
     
 
-    snprintf(msg.name, sizeof(msg.name), "%s", MSG_NAME);
+    snprintf(msg.name, sizeof(msg.name), "%s,%d", MSG_NAME,getpid());
 
-    /* Use rte_mp_request_sync() to send and wait for reply */
     if (rte_mp_request_sync(&msg, &reply, &ts) < 0) {
         printf("[SECONDARY] Failed to send request or receive reply\n");
         return 1;
