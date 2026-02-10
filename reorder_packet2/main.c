@@ -16,6 +16,28 @@
 
 int rte_reorder_seqn_dynfield_offset = -1;
 
+/*
+   5️⃣ What happens when you do this
+            REORDER_SEQN(m) = seq;
+
+
+            Macro expands to:
+
+            *(uint32_t *)((char *)m + offset) = seq;
+
+
+            So sequence is stored:
+
+            inside mbuf memory
+
+
+            NOT in:
+
+            rte_mbuf_dynfield struct
+
+
+*/
+
 #define REORDER_SEQN(mbuf) \
     (*RTE_MBUF_DYNFIELD((mbuf), rte_reorder_seqn_dynfield_offset, uint32_t *))
 
@@ -23,6 +45,7 @@ int rte_reorder_seqn_dynfield_offset = -1;
 static struct rte_mbuf *create_packet(struct rte_mempool *mp, uint32_t seq)
 {
     struct rte_mbuf *m = rte_pktmbuf_alloc(mp);
+    
 
     if (!m)
         return NULL;
@@ -68,7 +91,9 @@ int main(int argc, char **argv)
 
     reorder_buf = rte_reorder_create("REORDER_BUF",
                                      rte_socket_id(),
-                                     REORDER_SIZE);                           
+                                     REORDER_SIZE); 
+                                     
+                      
                                      
     if (!reorder_buf)
         rte_exit(EXIT_FAILURE, "Cannot create reorder buffer\n");

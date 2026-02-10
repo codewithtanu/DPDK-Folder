@@ -13,7 +13,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    printf("[SECONDARY-%d] Sending request to primary...\n",getpid());
+    printf("[SECONDARY-] Sending request to primary...\n");
 
     struct rte_mp_msg msg;
     struct rte_mp_reply reply;
@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 
     
 
-    snprintf(msg.name, sizeof(msg.name), "%s,%d", MSG_NAME,getpid());
+    snprintf(msg.name, sizeof(msg.name), "%s", MSG_NAME);
 
     if (rte_mp_request_sync(&msg, &reply, &ts) < 0) {
         printf("[SECONDARY] Failed to send request or receive reply\n");

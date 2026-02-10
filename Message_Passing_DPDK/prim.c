@@ -32,6 +32,8 @@ mp_callback(const struct rte_mp_msg *msg, const void *peer)
     // Send reply
     if (rte_mp_reply(&reply, peer) < 0)
         printf("[PRIMARY] Failed to send reply\n");
+
+    printf("[PRIMARY] Sent Msg Successfully\n");
     
     return 0;
 }
