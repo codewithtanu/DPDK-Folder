@@ -1,0 +1,126 @@
+1️⃣ Why we isolate CPU cores for DPDK
+
+Linux scheduler:
+
+Moves processes between cores
+
+Generates interrupts, context switches
+
+Causes latency + packet drops
+
+DPDK needs:
+
+Dedicated cores
+
+No Linux scheduling
+
+Busy polling (no interrupts)
+
+So we reserve some CPU cores only for DPDK.
+
+2️⃣ Methods to isolate cores (real system practice)
+
+There are three main mechanisms:
+
+(A) isolcpus kernel parameter (most common)
+
+This tells Linux:
+
+“Do NOT schedule normal processes on these cores.”
+
+Example:
+
+sudo nano /etc/default/grub
+
+
+Add in:
+
+GRUB_CMDLINE_LINUX="isolcpus=2,3,4,5 nohz_full=2,3,4,5 rcu_nocbs=2,3,4,5"
+
+
+Then:
+
+sudo update-grub
+sudo reboot
+
+
+Now:
+
+Cores 2-5 → reserved for DPDK
+
+Linux uses core 0-1 only
+
+(B) DPDK core selection using -l or -c
+
+When running DPDK:
+
+./app -l 2-5 -n 4
+
+
+Meaning:
+
+DPDK runs only on isolated cores 2-5
+
+Linux still avoids them because of isolcpus.
+
+(C) Interrupt affinity (VERY IMPORTANT)
+
+Even after isolation:
+
+❗ NIC interrupts may still go to DPDK cores
+This breaks performance.
+
+Check interrupts:
+
+cat /proc/interrupts
+
+
+Move them to Linux cores (0-1):
+
+echo 3 | sudo tee /proc/irq/<IRQ_NUMBER>/smp_affinity
+
+
+3 = binary 11 → cores 0 and 1 only.
+
+3️⃣ Ideal CPU layout for DPDK system
+
+Example 8-core CPU:
+
+Core	Usage
+0	Linux OS
+1	Linux + interrupts
+2-5	DPDK dataplane
+6-7	Control plane / spare
+
+This separation gives:
+
+✅ Low latency
+✅ High PPS
+✅ No scheduler interference
+
+4️⃣ How to verify isolation
+Check CPU usage
+htop
+
+
+You should see:
+
+Linux tasks → core 0-1 only
+
+DPDK threads → core 2-5 at 100% busy poll
+
+Check kernel isolation
+cat /sys/devices/system/cpu/isolated
+
+5️⃣ Interview-ready explanation
+
+If interviewer asks:
+
+“How do you isolate cores for DPDK?”
+
+You answer:
+
+We isolate dataplane cores using kernel boot parameters like isolcpus, nohz_full, and rcu_nocbs, run the DPDK application only on those cores using EAL -l option, and pin NIC interrupts to non-DPDK cores via IRQ affinity.
+This prevents Linux scheduling and interrupts from affecting packet processing latency.
+
+🔥 Strong production-level answer.

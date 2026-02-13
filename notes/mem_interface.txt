@@ -1,0 +1,169 @@
+Hugepages
+   ↓
+memseg → memzone → mempool → mbuf → packet data
+
+
+1️⃣ First clarify the term
+
+In DPDK, when people say “mem interface”, they usually mean:
+
+➡ Memory interface used for packet buffers and communication
+not a network interface.
+
+It commonly refers to:
+
+mempool
+
+mbuf
+
+hugepage memory
+
+shared memory between processes
+
+So we’ll understand the DPDK memory architecture.
+
+2️⃣ Why DPDK needs a special memory interface
+
+Normal Linux networking:
+
+Uses kernel memory
+
+Has copying between kernel ↔ user
+
+Causes slow performance
+
+DPDK design:
+
+➡ User-space packet processing
+➡ Zero-copy buffers
+➡ Hugepage memory
+➡ Lockless shared memory
+
+So DPDK builds its own memory system.
+
+3️⃣ Core components of DPDK memory system
+(A) Hugepages (base memory interface)
+
+DPDK allocates memory from:
+
+/dev/hugepages
+
+
+Why hugepages?
+
+Large contiguous memory
+
+Fewer TLB misses
+
+Faster DMA for NIC
+
+So all packet buffers live inside hugepage memory.
+
+(B) memseg & memzone
+
+After getting hugepages:
+
+DPDK divides memory into:
+
+memseg
+
+Physical contiguous chunk
+
+Used internally by EAL
+
+memzone
+
+Named shared memory region
+
+Can be accessed by multiple DPDK processes
+
+Example use:
+
+Shared rings
+
+Lookup tables
+
+IPC data
+
+(C) mempool (most important)
+
+mempool = pool of packet buffers
+
+Created using:
+
+rte_pktmbuf_pool_create()
+
+
+It contains:
+
+Many mbufs
+
+Pre-allocated objects
+
+Lockless per-core cache
+
+Purpose:
+
+➡ Fast allocation/free of packet buffers
+➡ Avoid malloc/free overhead
+
+(D) mbuf (actual packet container)
+
+mbuf = structure holding one packet
+
+Contains:
+
+Packet data pointer
+
+Length
+
+Metadata (RSS, checksum, VLAN, etc.)
+
+Flow:
+
+NIC DMA → mbuf data buffer → DPDK app → TX
+
+
+No kernel copy → very fast.
+
+4️⃣ Memory interface between processes (important)
+
+DPDK supports multi-process:
+
+Primary process creates:
+
+mempools
+
+rings
+
+memzones
+
+Secondary process maps same hugepage memory
+
+So communication happens via:
+
+➡ shared memory (not sockets)
+➡ zero-copy rings
+
+This is often called DPDK memory interface in IPC context.
+
+5️⃣ Simple mental diagram
+Hugepages
+   ↓
+memseg → memzone → mempool → mbuf → packet data
+
+
+Everything stays in user-space shared memory.
+
+6️⃣ Interview-ready definition 🔥
+
+If interviewer asks:
+
+“What is memory interface in DPDK?”
+
+You can say:
+
+DPDK uses a user-space hugepage-based memory subsystem consisting of memsegs, memzones, mempools, and mbufs.
+It enables zero-copy packet buffering, lockless allocation, and shared memory communication between processes, providing high-performance packet processing without kernel involvement.
+
+Perfect answer.

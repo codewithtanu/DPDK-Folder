@@ -1,0 +1,228 @@
+1️⃣ What happens normally in Linux (before isolation)
+
+In a normal system:
+
+Linux scheduler behavior
+
+Linux treats all CPU cores as equal
+
+It:
+
+Runs processes on any core
+
+Moves tasks between cores (load balancing)
+
+Sends timer interrupts to every core
+
+Runs kernel threads (RCU, ksoftirqd, etc.) on all cores
+
+So even if DPDK runs on core 3:
+
+❌ Linux may still:
+
+Schedule another process there
+
+Send periodic timer interrupts
+
+Run background kernel work
+
+➡ This causes latency spikes + packet drops.
+
+2️⃣ Goal of CPU isolation
+
+We want:
+
+Some cores → ONLY DPDK busy polling
+Other cores → Linux OS work
+
+
+So Linux must:
+
+Stop scheduling normal tasks on DPDK cores
+
+Stop sending timer interrupts there
+
+Move kernel background work away
+
+That’s exactly what these three parameters do.
+
+3️⃣ isolcpus — Scheduler isolation
+What it tells the kernel
+Do not schedule normal user processes on these CPUs.
+
+
+Example:
+
+isolcpus=2,3,4,5
+
+Internally in kernel
+
+These CPUs are removed from the scheduler’s load-balancing domain
+
+CFS scheduler avoids placing tasks there
+
+Only tasks that are explicitly pinned (like DPDK threads via pthread_setaffinity or EAL -l) can run.
+
+Important truth
+
+isolcpus does NOT fully isolate:
+
+Timer interrupts may still come
+
+Kernel threads may still run
+
+So we need more parameters.
+
+4️⃣ nohz_full — Remove periodic timer interrupts
+
+Normally:
+
+Every CPU gets scheduler tick interrupt every 1 ms
+
+This interrupt:
+
+Updates scheduler time
+
+Triggers kernel work
+
+Causes jitter
+
+With:
+nohz_full=2,3,4,5
+
+
+Linux:
+
+Stops periodic scheduler ticks on those CPUs
+
+Makes them tickless CPUs
+
+They run uninterrupted as long as only one task is running
+→ perfect for DPDK busy polling loop
+
+So now:
+
+✅ No scheduler tick
+✅ Less latency
+✅ Near real-time execution
+
+5️⃣ rcu_nocbs — Move RCU callbacks away
+What is RCU?
+
+RCU = Read-Copy-Update
+Kernel synchronization mechanism.
+
+It runs callback processing threads on CPUs.
+
+These callbacks:
+
+Wake up periodically
+
+Execute kernel work
+
+Cause jitter on isolated cores
+
+With:
+rcu_nocbs=2,3,4,5
+
+
+Kernel:
+
+Moves RCU callback execution to other CPUs (like core 0-1)
+
+Leaves isolated CPUs quiet
+
+6️⃣ Combined effect (very important)
+
+When you use all three:
+
+isolcpus + nohz_full + rcu_nocbs
+
+
+DPDK cores become:
+
+Almost userspace-only CPUs
+
+They have:
+
+✅ No Linux scheduling
+✅ No periodic timer tick
+✅ No RCU kernel work
+✅ Only your DPDK polling loop
+
+This is why DPDK achieves:
+
+Ultra-low latency
+
+Millions of packets per second
+
+7️⃣ Visual mental model
+
+Think of CPU cores like rooms in a house:
+
+Normal Linux
+
+All rooms:
+
+Kids running (processes)
+
+Doorbell ringing (interrupts)
+
+Cleaning staff entering (kernel threads)
+
+After isolation
+
+Some rooms:
+
+Locked
+
+No doorbell
+
+No cleaning staff
+
+Only DPDK worker sitting and working continuously
+
+That’s CPU isolation.
+
+8️⃣ One critical interview sentence 🔥
+
+If interviewer asks:
+
+“How do isolcpus, nohz_full, and rcu_nocbs work?”
+
+1️⃣ What -l 0-2 actually does
+
+Example:
+
+./app -l 0-2 -n 4
+
+
+This means:
+
+➡ DPDK creates worker threads pinned to CPU 0, 1, 2
+
+Internally:
+
+EAL calls CPU affinity APIs (pthread_setaffinity)
+
+Threads stay on those cores
+
+DPDK does busy polling on them
+
+So:
+
+✅ DPDK runs on cores 0–2
+❌ Linux is NOT prevented from using cores 0–2
+
+Answer:
+
+isolcpus removes CPUs from the scheduler load-balancing domain,
+nohz_full eliminates periodic scheduler tick interrupts on those CPUs,
+and rcu_nocbs offloads RCU callback processing to housekeeping CPUs.
+Together they create near-dedicated cores suitable for DPDK busy-polling dataplane threads.
+
+means when we use the -l 0-2 then it allows the dpdk threads to run on these cores
+but the linux can also use these cores to run the task.
+No. The DPDK -l option only pins DPDK threads to specific CPUs using affinity.
+Linux may still schedule tasks or interrupts on those CPUs unless kernel isolation parameters like isolcpus,
+ nohz_full, and rcu_nocbs are configured.

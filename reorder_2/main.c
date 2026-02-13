@@ -14,7 +14,7 @@
 #define BURST 8
 
 int seq_offset = -1;
-int rte_reorder_seqn_dynfield_offset=-1;
+extern int rte_reorder_seqn_dynfield_offset;
 
 int main(int argc, char **argv)
 {
@@ -64,6 +64,7 @@ int main(int argc, char **argv)
         if (!m)
             rte_panic("alloc failed\n");
 
+            
         
   uint32_t *data = rte_pktmbuf_mtod(m, uint32_t *);
     *data = seq_list[i];

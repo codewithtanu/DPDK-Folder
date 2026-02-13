@@ -82,12 +82,12 @@ int main(int argc, char **argv)
         rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
 
    
-    rte_reorder_seqn_dynfield_offset = 
-        rte_mbuf_dynfield_lookup("rte_reorder_seqn_dynfield", NULL);
+    // rte_reorder_seqn_dynfield_offset = 
+    //     rte_mbuf_dynfield_lookup("a", NULL);
 
-    if (rte_reorder_seqn_dynfield_offset < 0) {
-        printf("Reorder seqn dynfield not yet registered (will be auto-registered)\n");
-    }
+    // if (rte_reorder_seqn_dynfield_offset < 0) {
+    //     printf("Reorder seqn dynfield not yet registered (will be auto-registered)\n");
+    // }
 
     reorder_buf = rte_reorder_create("REORDER_BUF",
                                      rte_socket_id(),
@@ -99,13 +99,13 @@ int main(int argc, char **argv)
         rte_exit(EXIT_FAILURE, "Cannot create reorder buffer\n");
 
 
-    if (rte_reorder_seqn_dynfield_offset < 0) {
-        rte_reorder_seqn_dynfield_offset = 
-            rte_mbuf_dynfield_lookup("rte_reorder_seqn_dynfield", NULL);
+    // if (rte_reorder_seqn_dynfield_offset < 0) {
+    //     rte_reorder_seqn_dynfield_offset = 
+    //         rte_mbuf_dynfield_lookup("a", NULL);
         
-        if (rte_reorder_seqn_dynfield_offset < 0)
-            rte_exit(EXIT_FAILURE, "Cannot find reorder seqn dynfield\n");
-    }
+    //     if (rte_reorder_seqn_dynfield_offset < 0)
+    //         rte_exit(EXIT_FAILURE, "Cannot find reorder seqn dynfield\n");
+    // }
 
     printf("Simulating out-of-order packet arrival:\n");
 

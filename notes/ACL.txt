@@ -1,0 +1,232 @@
+1️⃣ What is ACL?
+
+ACL = Access Control List
+
+It is a set of rules that decides:
+
+Allow or Deny network packets
+
+
+based on fields like:
+
+Source IP
+
+Destination IP
+
+Port number
+
+Protocol (TCP/UDP/ICMP)
+
+So ACL is basically:
+
+➡ Packet filtering rules
+
+2️⃣ Simple real-life example
+
+Think of security at a building gate:
+
+Guard checks:
+
+Who you are
+
+Where you’re going
+
+Then:
+
+Allowed → enter
+
+Not allowed → blocked
+
+ACL works exactly the same for network packets.
+
+3️⃣ Example ACL rule in networking
+
+Example rule:
+
+Allow: 192.168.1.10 → Port 80 (HTTP)
+Deny : All other traffic
+
+
+Meaning:
+
+Only that IP can access web server
+
+Everything else is blocked
+
+4️⃣ Where ACL is used
+
+ACLs are very common in:
+
+Networking devices
+
+Routers
+
+Switches
+
+Firewalls
+
+Systems & software
+
+Linux iptables / nftables
+
+Cloud security groups
+
+DPDK firewall or packet filter apps
+
+5️⃣ How ACL works internally (simple flow)
+
+When a packet arrives:
+
+Packet received
+     ↓
+Compare with ACL rules
+     ↓
+Match found?
+   YES → Allow/Deny action
+   NO  → Default rule (usually deny)
+
+
+So ACL is just fast rule matching.
+
+6️⃣ ACL in DPDK (important for you)
+
+Since you are learning DPDK, ACL is implemented using:
+
+rte_acl library
+
+
+This provides:
+
+High-speed rule lookup
+
+Millions of packets per second filtering
+
+Used in:
+
+DPDK firewall
+
+NAT
+
+Traffic classifier
+
+So DPDK ACL = software firewall in user space.
+
+7️⃣ Simple interview definition 🔥
+
+You can say:
+
+An ACL (Access Control List) is a set of rules used to permit or deny network traffic based on packet header fields 
+such as IP address, port, and protocol. In DPDK, ACLs are implemented using the rte_acl library for high-performance
+packet filtering.
+
+
+
+1️⃣ Basic idea
+ACL
+
+A list of rules
+
+Decides Allow or Deny packets
+
+Based on:
+
+IP address
+
+Port
+
+Protocol
+
+➡ Packet filtering mechanism
+
+Firewall
+
+A complete security system for network traffic
+
+Can do:
+
+Packet filtering (using ACL)
+
+Connection tracking
+
+NAT
+
+Deep inspection
+
+Logging & alerts
+
+➡ Firewall = big system
+➡ ACL = one feature inside firewall
+
+2️⃣ Simple relationship (most important)
+
+Think like this:
+
+Firewall
+   └── uses ACL rules to filter packets
+
+
+So:
+
+ACL is the rule engine
+Firewall is the full protection system
+
+3️⃣ Real-life analogy
+
+Imagine airport security:
+
+ACL → list of allowed/blocked passengers
+
+Firewall → full airport security system:
+
+ID check
+
+baggage scan
+
+metal detector
+
+security guards
+
+So:
+
+➡ ACL = one part of firewall security.
+
+4️⃣ Technical comparison
+Feature	ACL	Firewall
+Purpose	Allow/Deny packets	Full network protection
+Rule matching	Yes	Yes (uses ACL)
+Connection tracking	❌ No	✅ Yes
+NAT support	❌ No	✅ Yes
+Deep packet inspection	❌ No	✅ Yes
+Logging/alerts	Limited	Advanced
+5️⃣ In networking & DPDK context (important for you)
+In routers/switches
+
+ACL used for basic filtering
+
+In firewalls
+
+ACL rules are core filtering logic
+
+In DPDK
+
+rte_acl → fast rule matching
+
+Used inside:
+
+DPDK firewall
+
+NAT + security gateway
+
+Traffic classifier
+
+So in DPDK:
+
+DPDK Firewall App
+        ↓
+     rte_acl rules
+
+6️⃣ Interview-ready one-line answer 🔥
+
+ACL is a rule-based packet filtering mechanism, while a firewall is a complete network security system that 
+uses ACLs along with features like connection tracking, NAT, and deep inspection to protect the network.
+
