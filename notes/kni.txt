@@ -1,0 +1,612 @@
+1️⃣ What is KNI in DPDK?
+
+KNI = Kernel NIC Interface
+
+It is a mechanism that allows DPDK user-space applications to communicate with the Linux kernel networking stack.
+
+Simple idea
+
+DPDK normally:
+
+Bypasses the Linux kernel
+
+Works fully in user space
+
+Gives very high packet speed
+
+But sometimes we still need:
+
+Linux tools like ping, tcpdump, iptables
+
+Kernel routing / ARP / IP stack
+
+Control-plane communication
+
+👉 KNI was created to connect:
+
+DPDK user space  ↔  Linux kernel network stack
+
+
+So packets can move between kernel and DPDK.
+
+2️⃣ Why KNI was needed?
+
+Because pure DPDK has no kernel networking.
+
+Without KNI:
+
+No ifconfig
+
+No ping
+
+No kernel routing
+
+No standard sockets
+
+So KNI allowed:
+
+Control-plane in kernel
+
+Data-plane in DPDK
+
+This was very useful in:
+
+Early NFV (Network Function Virtualization)
+
+Routers/firewalls using DPDK
+
+Telecom packet processing
+
+3️⃣ KNI Architecture
+Components
+1. Kernel Module (rte_kni.ko)
+
+Runs inside Linux kernel.
+
+Responsibilities:
+
+Creates virtual network interface (like kni0)
+
+Sends/receives packets to/from DPDK
+
+Handles ioctl/configuration
+
+2. User-space Library (librte_kni)
+
+Used by DPDK app.
+
+Responsibilities:
+
+Allocate shared memory
+
+Send packets to kernel
+
+Receive packets from kernel
+
+Handle requests from kernel
+
+3. Shared Memory + FIFO Queues
+
+Packets move via:
+
+DPDK mbufs → shared memory → kernel skbuff
+kernel skbuff → shared memory → DPDK mbuf
+
+
+Using:
+
+RX queue
+
+TX queue
+
+Allocation/free queues
+
+Request queue
+
+This avoids copying packets, improving speed.
+
+4️⃣ How KNI Works (Step-by-Step Packet Flow)
+Case A — Packet from NIC → Kernel via KNI
+Step-by-step
+
+NIC receives packet.
+
+DPDK poll-mode driver gets packet → mbuf.
+
+DPDK app decides:
+
+Forward?
+
+Drop?
+
+Send to kernel?
+
+If send to kernel:
+
+Call rte_kni_tx_burst()
+
+Packet goes:
+
+mbuf → shared memory → kernel module → sk_buff → Linux stack
+
+
+Now Linux tools can see it:
+
+tcpdump
+
+ping
+
+iptables
+
+Case B — Packet from Kernel → DPDK
+
+Linux sends packet via kni0 interface.
+
+Kernel converts:
+
+sk_buff → shared memory
+
+
+DPDK reads using:
+
+rte_kni_rx_burst()
+
+
+Packet becomes mbuf and processed in fast path.
+
+5️⃣ Advantages of KNI
+✔ 1. Kernel compatibility
+
+Can use:
+
+ping
+
+tcpdump
+
+routing table
+
+sockets
+
+firewall rules
+
+✔ 2. Hybrid architecture
+Control plane → Kernel
+Data plane → DPDK
+
+
+Very useful in NFV routers & firewalls.
+
+✔ 3. Easy debugging
+
+You can:
+
+Capture packets
+
+Use standard Linux tools
+
+✔ 4. No full packet copy
+
+Uses shared memory + zero-copy style transfer → faster than TAP.
+
+6️⃣ Disadvantages of KNI
+❌ 1. Requires kernel module
+
+Bad for:
+
+Security
+
+Maintainability
+
+Containers
+
+Cloud environments
+
+Modern systems avoid custom kernel modules.
+
+❌ 2. Poor performance vs pure user-space
+
+Still involves:
+
+Kernel scheduling
+
+Context interaction
+
+Synchronization overhead
+
+So slower than:
+
+pure DPDK
+
+AF_XDP
+
+virtio-user
+
+memif
+
+❌ 3. Complex synchronization
+
+Needs:
+
+Locks
+
+FIFOs
+
+Request handling
+
+Hard to maintain → many bugs historically.
+
+❌ 4. Not scalable for multi-core high PPS
+
+KNI becomes bottleneck in:
+
+100G traffic
+
+many cores
+
+7️⃣ Why KNI is Deprecated
+
+DPDK officially deprecated KNI because:
+
+1. Kernel module maintenance burden
+
+Linux kernel changes frequently → KNI breaks.
+
+Maintaining out-of-tree module = huge effort.
+
+2. Better modern alternatives exist
+✔ AF_XDP
+
+Kernel-supported
+
+Zero-copy
+
+No custom module
+
+High performance
+
+✔ virtio-user + vhost
+
+Standard virtualization method
+
+✔ memif (used in VPP)
+
+High-speed shared memory interface
+
+These are:
+
+faster
+
+safer
+
+maintained
+
+3. Security concerns
+
+Custom kernel module = risk in production/cloud.
+
+Cloud providers do not allow KNI.
+
+8️⃣ What replaces KNI today?
+
+Modern replacements:
+
+AF_XDP → main successor
+
+TAP + XDP
+
+virtio-user
+
+memif (VPP)
+
+So industry moved away from KNI.
+
+9️⃣ Real-world analogy (easy understanding)
+
+Think:
+
+DPDK = high-speed private highway
+
+Linux kernel = normal city roads
+
+KNI = small connecting bridge
+
+Old bridge:
+
+slow
+
+hard to maintain
+
+unsafe
+
+Now replaced by modern flyovers (AF_XDP, memif).
+
+🔟 Interview-ready summary
+Definition
+
+KNI is a DPDK mechanism to exchange packets between user-space DPDK and Linux kernel networking stack using shared memory and kernel module.
+
+Why deprecated
+
+Because:
+
+Needs kernel module
+
+Hard to maintain
+
+Lower performance
+
+Security issues
+
+Replaced by AF_XDP / virtio / memif
+
+
+
+1️⃣ What is Data Plane and Control Plane?
+
+Think of a router or firewall doing two different kinds of work.
+
+🟢 Data Plane (Fast Path)
+Meaning
+
+The data plane is responsible for:
+
+➡ Forwarding packets as fast as possible
+
+It does no complex thinking, only:
+
+Look at packet header
+
+Decide output port
+
+Send packet immediately
+
+Key points
+
+Runs at very high speed
+
+Uses DPDK / ASIC / hardware acceleration
+
+Handles millions of packets per second
+
+Must be simple and optimized
+
+Example
+
+When a packet arrives:
+
+Check destination IP → find route → send to next port
+
+
+That is data plane work.
+
+🔵 Control Plane (Brain of the Network)
+Meaning
+
+The control plane decides HOW packets should be forwarded.
+
+It:
+
+Builds routing tables
+
+Runs protocols like:
+
+OSPF
+
+BGP
+
+ARP
+
+Configures firewall/NAT rules
+
+Handles management & configuration
+
+Speed
+
+Slow but intelligent
+
+Runs in Linux kernel or user processes
+
+🧠 Easy Real-life Analogy
+
+Think of a city traffic system:
+
+Control plane → traffic police + traffic rules
+(decides where vehicles should go)
+
+Data plane → actual cars moving on roads
+(fast movement, no thinking)
+
+2️⃣ Where does DPDK fit?
+
+DPDK is designed for:
+
+➡ Data plane only (ultra-fast packet forwarding)
+
+It bypasses Linux kernel to gain speed.
+
+But then problem:
+
+❗ Linux kernel = control plane
+❗ DPDK = data plane
+
+They cannot talk directly.
+
+👉 KNI was created to connect them.
+
+3️⃣ Is KNI used only when sending packets from Kernel → DPDK?
+
+No.
+KNI works in both directions.
+
+Direction 1 — DPDK → Kernel
+
+Used when:
+
+Packet must be processed by Linux stack
+
+Need:
+
+ping
+
+tcpdump
+
+routing
+
+iptables
+
+sockets
+
+Flow:
+
+NIC → DPDK → KNI → Linux kernel → application
+
+Direction 2 — Kernel → DPDK
+
+Used when:
+
+Linux application sends packet via kni0
+
+Packet must go to fast DPDK forwarding path
+
+Flow:
+
+Linux app → kernel stack → KNI → DPDK → NIC
+
+
+👉 So KNI is bidirectional, not only kernel→DPDK.
+
+4️⃣ Why was KNI deprecated? (Very Important)
+
+DPDK officially deprecated KNI.
+Here are the real technical reasons.
+
+❌ 1. Requires custom kernel module
+
+KNI depends on:
+
+rte_kni.ko  (external kernel module)
+
+
+Problems:
+
+Linux kernel changes frequently
+
+Module breaks with new kernels
+
+Hard to maintain
+
+Not allowed in many cloud/container environments
+
+👉 Modern design avoids out-of-tree kernel modules.
+
+❌ 2. Security risks
+
+Custom kernel module means:
+
+Runs in kernel space
+
+Any bug → kernel crash or exploit
+
+Cloud providers:
+
+AWS
+
+Azure
+
+GCP
+
+➡ Do NOT allow KNI.
+
+❌ 3. Performance is not good enough today
+
+Although faster than TAP:
+
+KNI still has:
+
+Kernel interaction overhead
+
+Synchronization cost
+
+Not scalable for 100G+ traffic
+
+Bottleneck in multi-core systems
+
+Modern alternatives are:
+
+AF_XDP → zero-copy, kernel-native
+
+memif (VPP) → shared memory, faster
+
+virtio-user/vhost → standard virtualization path
+
+👉 These are faster and cleaner.
+
+❌ 4. Complex and hard to maintain
+
+KNI includes:
+
+FIFOs
+
+locks
+
+request handling
+
+mbuf ↔ skb conversion
+
+This created:
+
+bugs
+
+maintenance burden
+
+unstable behavior across kernels
+
+DPDK team decided:
+
+➡ Not worth maintaining anymore.
+
+❌ 5. Industry moved to kernel-supported tech
+
+Modern Linux networking prefers:
+
+XDP / eBPF
+
+AF_XDP sockets
+
+standard virtio
+
+So KNI became:
+
+➡ obsolete design.
+
+5️⃣ Short Interview-Ready Answers
+Data plane
+
+Fast packet forwarding path (DPDK, hardware, ASIC).
+
+Control plane
+
+Routing decisions, protocols, configuration (Linux/kernel/user apps).
+
+Is KNI only kernel→DPDK?
+
+No.
+It is bidirectional:
+
+DPDK → kernel
+
+kernel → DPDK
+
+Why deprecated?
+
+Main reasons:
+
+Needs external kernel module
+
+Security risks
+
+Poor scalability & performance vs AF_XDP
+
+Hard to maintain with new kernels
+
+Replaced by modern kernel-native technologies
