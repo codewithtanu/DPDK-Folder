@@ -83,10 +83,10 @@ initialize_port(uint16_t port_id, struct rte_mempool *mbuf_pool)
     struct rte_ether_addr addr;
     rte_eth_macaddr_get(port_id, &addr);
 
-    printf("Port %u MAC: %02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
-           ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 "\n",
-           port_id,
-           RTE_ETHER_ADDR_BYTES(&addr));
+    // printf("Port %u MAC: %02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
+    //        ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8 "\n",
+    //        port_id,
+    //        RTE_ETHER_ADDR_BYTES(&addr));
     
     printf("Port %u has been Initialized and been Started.......\n",port_id);
     nl

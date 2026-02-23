@@ -1,0 +1,325 @@
+In DPDK, testpmd flow commands are used to create hardware-accelerated packet classification rules using the rte_flow API.
+
+Instead of forwarding all packets normally, you can tell the NIC:
+
+“If a packet matches this pattern → perform this action.”
+
+This is called flow offloading.
+
+🔹 What is testpmd?
+
+testpmd is a sample DPDK application located in:
+
+dpdk/app/test-pmd/
+
+It is used for:
+
+Testing NIC features
+
+Benchmarking
+
+Flow rule configuration
+
+Packet forwarding experiments
+
+🔹 What Are Flow Commands?
+
+Flow commands in testpmd allow you to:
+
+Match packets (pattern)
+
+Define actions (drop, queue, mark, forward, etc.)
+
+Offload rules to NIC hardware
+
+These commands internally use:
+
+rte_flow_create()
+rte_flow_validate()
+rte_flow_destroy()
+🔹 Basic Flow Command Structure
+
+In testpmd CLI:
+
+flow create <port_id> <attr> pattern <pattern_items> actions <action_items>
+
+Structure:
+
+flow create 0
+  ingress
+  pattern eth / ipv4 / tcp / end
+  actions queue index 5 / end
+
+Meaning:
+
+On port 0
+
+For incoming packets
+
+Match Ethernet + IPv4 + TCP
+
+Send to RX queue 5
+
+🔹 Flow Rule Architecture (Important)
+
+A flow rule has 3 parts:
+
+Attributes
+Pattern
+Actions
+1️⃣ Attributes
+
+Defines where rule applies.
+
+Examples:
+
+ingress → incoming packets
+
+egress → outgoing packets
+
+transfer → switch domain (SR-IOV / embedded switch)
+
+Example:
+
+ingress
+2️⃣ Pattern (Matching Section)
+
+Defines what packet fields to match.
+
+Pattern items:
+
+eth
+
+ipv4
+
+ipv6
+
+tcp
+
+udp
+
+icmp
+
+vlan
+
+vxlan
+
+gtp
+
+raw
+
+end (mandatory)
+
+Example:
+
+pattern eth dst is aa:bb:cc:dd:ee:ff /
+        ipv4 src is 192.168.1.10 /
+        tcp dst is 80 /
+        end
+
+This matches:
+
+Specific MAC
+
+Specific source IP
+
+TCP destination port 80
+
+3️⃣ Actions
+
+Defines what to do with matched packets.
+
+Common actions:
+
+drop
+
+queue index X
+
+rss
+
+mark id X
+
+count
+
+port_id X
+
+jump
+
+passthru
+
+end
+
+Example:
+
+actions queue index 3 / count / end
+
+Meaning:
+
+Send packet to queue 3
+
+Enable counter
+
+🔹 Common Flow Commands in testpmd
+🔸 1. Create Rule
+flow create 0 ingress pattern eth / ipv4 / tcp / end actions drop / end
+
+Drops all IPv4 TCP packets on port 0.
+
+🔸 2. Validate Rule (Before Creating)
+flow validate 0 ingress pattern eth / ipv4 / tcp / end actions drop / end
+
+Checks if NIC supports this rule.
+
+Internally calls:
+
+rte_flow_validate()
+🔸 3. List Rules
+flow list 0
+
+Shows all installed rules on port 0.
+
+🔸 4. Destroy Rule
+flow destroy 0 rule 2
+
+Deletes rule ID 2.
+
+🔸 5. Flush All Rules
+flow flush 0
+
+Removes all rules from port 0.
+
+🔹 Advanced Flow Examples
+Example 1: Send TCP port 80 to Queue 5
+flow create 0 ingress \
+pattern eth / ipv4 / tcp dst is 80 / end \
+actions queue index 5 / end
+Example 2: Drop Specific IP
+flow create 0 ingress \
+pattern eth / ipv4 src is 192.168.1.100 / end \
+actions drop / end
+Example 3: Count + Mark
+flow create 0 ingress \
+pattern eth / ipv4 / end \
+actions mark id 10 / count / queue index 2 / end
+
+NIC will:
+
+Tag packet with mark 10
+
+Count packets
+
+Send to queue 2
+
+🔹 How It Works Internally
+
+When you type:
+
+flow create ...
+
+testpmd:
+
+Parses CLI
+
+Builds rte_flow_attr
+
+Builds rte_flow_item[]
+
+Builds rte_flow_action[]
+
+Calls:
+
+rte_flow_create(port_id, &attr, pattern, actions, &error);
+
+Driver:
+
+Converts rule into NIC hardware format
+
+Programs TCAM / Flow table
+
+Returns flow handle
+
+🔹 Why Flow Offload Is Powerful
+
+Without flow rules:
+
+NIC → RX Queue → DPDK → Software classification
+
+With flow offload:
+
+NIC hardware classification → Direct queue → DPDK
+
+Benefits:
+
+Lower CPU usage
+
+Higher throughput
+
+Hardware-level filtering
+
+Reduced latency
+
+🔹 Software vs Hardware Flow
+
+If NIC supports rte_flow:
+
+Rule goes to hardware
+
+If not:
+
+Some drivers support software fallback
+
+Otherwise rule creation fails
+
+You must check with:
+
+flow validate
+🔹 Where Flow Is Used in Real Systems
+
+Load balancing
+
+Firewall offload
+
+5G UPF packet steering
+
+DDoS filtering
+
+Traffic shaping
+
+SR-IOV VF steering
+
+🔹 Important Things to Remember
+
+✔ end keyword mandatory
+✔ Order of pattern matters
+✔ Not all NICs support all patterns
+✔ Use flow validate first
+✔ Rules are per port
+
+🔹 Difference Between Flow and RSS
+Flow Rule	RSS
+Exact matching	Hash-based
+Can drop packets	Cannot drop
+Can match L2–L7	Mostly L3/L4
+Hardware programmable	Limited control
+🔹 Debugging Flow Rules
+
+Enable verbose logs:
+
+--log-level=pmd,8
+
+Check capabilities:
+
+show port info 0
+🔹 Real-World Example Scenario
+
+Imagine:
+
+You have 8 RX queues
+
+Want HTTP traffic → queue 0
+
+HTTPS → queue 1
+
+Everything else → RSS
+
+Flow rules allow this fine-grained steering.
