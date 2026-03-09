@@ -10,7 +10,7 @@
 
 #define NUM_MBUFS 1024
 #define MBUF_CACHE_SIZE 32
-#define REORDER_SIZE 16
+#define REORDER_SIZE 8
 #define BURST 32
 
 
@@ -50,8 +50,8 @@ static struct rte_mbuf *create_packet(struct rte_mempool *mp, uint32_t seq)
     if (!m)
         return NULL;
 
-    uint32_t *data = rte_pktmbuf_mtod(m, uint32_t *);
-    *data = seq;
+    // uint32_t *data = rte_pktmbuf_mtod(m, uint32_t *);
+    // *data = seq;
 
     m->data_len = sizeof(uint32_t);
     m->pkt_len  = sizeof(uint32_t);
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 
     printf("Simulating out-of-order packet arrival:\n");
 
-    uint32_t arrival_seq[] = {0, 2, 1, 4, 3};
+    uint32_t arrival_seq[] = {15, 18, 16, 17, 3};
 
     for (i = 0; i < sizeof(arrival_seq) / sizeof(arrival_seq[0]); i++) {
         struct rte_mbuf *m = create_packet(mbuf_pool, arrival_seq[i]);
@@ -135,8 +135,8 @@ int main(int argc, char **argv)
         printf("nb_drain:%d\n", nb_drain);
         
         for (i = 0; i < nb_drain; i++) {
-            uint32_t *seq = rte_pktmbuf_mtod(mbufs[i], uint32_t *);
-            printf("Output seq=%u\n", *seq);
+            uint32_t seq = REORDER_SEQN(mbufs[i]);
+            printf("Output seq=%u\n", seq);
             rte_pktmbuf_free(mbufs[i]);
         }
     }

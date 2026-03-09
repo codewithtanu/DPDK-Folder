@@ -1,0 +1,432 @@
+---------------------------------------------------------------------------------------------------------------
+
+In DPDK, packets are processed very fast and often in parallel on multiple CPU cores. 
+Because of this parallel processing, packets may arrive or be processed out of order.
+
+The Reorder Library in DPDK is used to rearrange packets into the correct order before sending them forward.
+
+It ensures packets are transmitted in the same sequence in which they were received.
+
+
+---------------------------------------------------------------------------------------------------------------
+
+2. Why Reordering is Needed
+
+DPDK applications often use:
+
+Multiple cores
+
+Multiple queues
+
+Parallel processing
+
+Because of this, packets may be processed like this:
+
+Packet	Arrival Order	Processed Order
+P1	1	1
+P2	2	3
+P3	3	2
+P4	4	4
+
+So packets become:
+
+P1 P3 P2 P4
+
+But the correct order should be:
+
+P1 P2 P3 P4
+
+The Reorder Library fixes this.
+
+
+---------------------------------------------------------------------------------------------------------------
+
+3. How Reorder Library Works
+
+The library uses a sequence number to track packet order.
+
+Step-by-step process
+
+Packets are assigned sequence numbers
+
+P1 → seq 1
+P2 → seq 2
+P3 → seq 3
+P4 → seq 4
+
+Packets are processed by multiple cores
+
+They may arrive out of order:
+
+P1 P3 P2 P4
+
+Reorder buffer stores packets
+
+The library keeps packets in a buffer window.
+
+Packets are released in correct order
+
+Output becomes:
+
+P1 P2 P3 P4
+
+---------------------------------------------------------------------------------------------------------------
+
+Components -
+
+reorder buffer , seq. no. , sliding window
+
+---------------------------------------------------------------------------------------------------------------
+
+In TCP, the sequence number (seq) tells the position of the first byte of data in the TCP data stream. It helps the receiver place packets in the correct order.
+
+Your example:
+
+Packet 1 → seq = 1000
+
+This packet contains data starting from byte number 1000 in the TCP stream.
+
+Packet 2 → seq = 1500
+
+This packet contains data starting from byte number 1500.
+
+Packet 3 → seq = 2000
+
+This packet contains data starting from byte number 2000.
+
+----------------------------------------------------------------------------
+
+
+2. DPDK Reorder Library Sequence Number
+
+The DPDK Reorder Library uses its own sequence numbers, which are:
+
+Assigned by the DPDK application
+
+Stored in mbuf metadata
+
+Used only for packet ordering inside the pipeline
+
+----------------------------------------------------------------------------
+
+1. Where the Sequence Number is Actually Stored
+
+In the DPDK Reorder Library, the sequence number is stored in the dynamic field area of the mbuf.
+
+----------------------------------------------------------------------------
+
+--------How the Library Accesses It----------------
+
+DPDK provides a macro to access dynamic fields:
+
+RTE_MBUF_DYNFIELD(mbuf, offset, type *)
+
+----------------------------------------------------------------------------
+
+2. How Reorder Library Uses This Area
+
+The reorder library registers a dynamic field using:
+
+rte_mbuf_dynfield_register()
+
+This function:
+
+Reserves some bytes inside the dynfield region
+
+Returns an offset
+
+The library stores the sequence number at that offset
+
+So internally:
+
+dynfield1 memory
+┌─────────────────────────┐
+│ seqn (reorder library)  │
+│ other dyn fields        │
+└─────────────────────────┘
+
+----------------------------------------------------------------------------
+
+It does NOT mean:
+
+mbuf->dynfield1 = seqn
+
+Instead it means:
+
+dynfield_area + offset → sequence number
+
+Because multiple libraries may share this space.
+
+Example layout:
+
+dynfield region
+
+| timestamp | reorder seqn | custom metadata |
+      ↑           ↑
+    offset1     offset2
+
+----------------------------------------------------------------------------
+
+1. What dynfield1 Actually Is
+
+From your screenshot:
+
+uint32_t dynfield1[9]
+Reserved for dynamic fields
+
+This means:
+
+It is reserved memory inside rte_mbuf
+
+Libraries can store their metadata here
+
+The memory size is:
+
+9 × 4 bytes = 36 bytes
+
+So dynfield1 is basically a small metadata buffer inside the mbuf.
+
+Think of it like:
+
+rte_mbuf
+ ├─ packet metadata
+ ├─ dynfield1[36 bytes]  ← dynamic metadata area
+ └─ packet data
+
+----------------------------------------------------------------------------
+
+ 2. What dynfield2 Is
+
+From your second screenshot:
+
+uint64_t dynfield2
+Reserved for dynamic fields when next pointer is in first cache line
+
+This exists because DPDK optimizes mbuf for cache-line layout.
+
+Sometimes:
+
+next pointer is placed differently
+
+To maintain cache alignment, DPDK provides dynfield2
+
+Size:
+
+8 bytes
+
+----------------------------------------------------------------------------
+
+Your Program
+     |
+     |  rte_reorder_create()
+     v
+
+validate arguments
+     |
+allocate tailq entry
+     |
+allocate reorder buffer memory
+     |
+rte_reorder_init()
+     |
+     |---- register dynfield
+     |         |
+     |         v
+     |   rte_mbuf_dynfield_register()
+     |
+initialize reorder structure
+     |
+insert into global tailq
+     |
+return reorder buffer
+
+----------------------------------------------------------------------------
+
+rte_reorder_init()
+
+│
+├─ calculate minimum memory
+│
+├─ define dynfield descriptor
+│
+├─ validate arguments
+│
+├─ register dynfield in rte_mbuf
+│       │
+│       └─ rte_mbuf_dynfield_register()
+│             → returns offset
+│
+├─ clear buffer memory
+│
+├─ copy buffer name
+│
+├─ initialize sizes and masks
+│
+├─ setup ready buffer pointer
+│
+├─ setup order buffer pointer
+│
+└─ return initialized reorder buffer
+
+----------------------------------------------------------------------------
+
+__rte_mbuf_dynfield_register_offset()
+
+1. Initialize shared dynfield metadata
+2. Check if field already exists
+3. Allow only primary process to register
+4. Scan rte_mbuf memory for valid offset
+5. Verify alignment and free space
+6. Choose best offset
+7. Allocate registry entry
+8. Insert dynfield into global list
+9. Mark bytes as used
+10. Update free-space map
+11. Return offset
+
+----------------------------------------------------------------------------
+
+The reorder buffer maintains a moving window of expected packets.
+
+Packets inside the window → stored
+
+Packets slightly ahead → window shifts
+
+Packets too old or too far → dropped
+
+----------------------------------------------------------------------------
+
+1️⃣ rte_reorder_insert() — Insert Packet
+
+Purpose:
+Place an incoming packet in the correct position based on its sequence number.
+
+Steps
+
+Initialize window
+
+If first packet → set min_seqn to its sequence number.
+
+Calculate offset
+
+offset = packet_seq - min_seqn
+
+This tells how far the packet is from the expected sequence.
+
+Three possible cases
+
+Case	Condition	Action
+Inside window	offset < size	store packet in order buffer
+Slightly ahead	offset < 2*size	move window forward, then store packet
+Too old / too far	offset ≥ 2*size	reject packet
+
+So insert() places packets into the reorder window.
+
+----------------------------------------------------------------------------
+
+2️⃣ rte_reorder_drain() — Output Packets
+
+Purpose:
+Return packets that are ready in correct order.
+
+Steps
+
+Take packets from ready buffer
+
+If packets were already prepared earlier.
+
+Then check order buffer
+
+Starting from the head (expected packet).
+
+If packet exists → output it.
+
+Move window forward
+
+min_seqn++
+head++
+
+Stop draining if
+
+requested number of packets returned (max_mbufs)
+
+next expected packet is missing.
+
+
+----------------------------------------------------------------------------
+
+
+static unsigned
+rte_reorder_fill_overflow(struct rte_reorder_buffer *b, unsigned n)
+{
+	/*
+	 * 1. Move all ready entries that fit to the ready_buf
+	 * 2. check if we meet the minimum needed (n).
+	 * 3. If not, then skip any gaps and keep moving.
+	 * 4. If at any point the ready buffer is full, stop
+	 * 5. Return the number of positions the order_buf head has moved
+	 */
+
+	struct cir_buffer *order_buf = &b->order_buf,
+			*ready_buf = &b->ready_buf;
+
+	unsigned int order_head_adv = 0;
+
+	/*
+	 * move at least n packets to ready buffer, assuming ready buffer
+	 * has room for those packets.
+	 */
+	while (order_head_adv < n &&
+			((ready_buf->head + 1) & ready_buf->mask) != ready_buf->tail) {
+
+		/* if we are blocked waiting on a packet, skip it */
+		if (order_buf->entries[order_buf->head] == NULL) {
+			order_buf->head = (order_buf->head + 1) & order_buf->mask;
+			order_head_adv++;
+		}
+
+		/* Move all ready entries that fit to the ready_buf */
+		while (order_buf->entries[order_buf->head] != NULL) {
+			ready_buf->entries[ready_buf->head] =
+					order_buf->entries[order_buf->head];
+
+			order_buf->entries[order_buf->head] = NULL;
+			order_head_adv++;
+
+			order_buf->head = (order_buf->head + 1) & order_buf->mask;
+
+			if (((ready_buf->head + 1) & ready_buf->mask) == ready_buf->tail)
+				break;
+
+			ready_buf->head = (ready_buf->head + 1) & ready_buf->mask;
+		}
+	}
+
+	b->min_seqn += order_head_adv;
+	/* Return the number of positions the order_buf head has moved */
+	return order_head_adv;
+}
+
+----------------------------------------------------------------------------------------------------------------
+
+
+
+8️⃣ Key Rule of Reorder Library
+
+Packets are released only if sequence numbers are consecutive starting from min_seqn.
+
+If a gap exists:
+
+15 16 _ 18
+
+then:
+
+18 cannot be drained
+
+until 17 arrives or overflow logic moves the window.
+
+✅ Final Answer
+
+Packet 18 is not drained because packet 17 is missing. The reorder library stops
+ draining when it encounters a gap in the sequence, ensuring packets are always returned in strict order.
+

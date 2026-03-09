@@ -37,6 +37,7 @@ int main(int argc, char **argv)
         .name  = "example_seq_no",
         .size  = sizeof(uint32_t),
         .align = __alignof__(uint32_t),
+
     };
 
     seq_offset = rte_mbuf_dynfield_register(&seqno_dynfield);

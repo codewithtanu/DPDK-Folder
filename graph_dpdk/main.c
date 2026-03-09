@@ -71,7 +71,7 @@ rx_node_process(struct rte_graph *graph,
                 void **objs,
                 uint16_t nb_objs __rte_unused)
 {
-    struct rte_mbuf **pkts = (struct rte_mbuf **)objs;
+    struct rte_mbuf **pkts = NULL;
 
     /* Receive packets from port 0, queue 0 */
     uint16_t nb_rx = rte_eth_rx_burst(0, 0, pkts, BURST_SIZE);

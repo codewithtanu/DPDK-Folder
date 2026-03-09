@@ -1,0 +1,164 @@
+
+Here are the important points extracted from the documentation of rte_eal_init() in DPDK. I’ve condensed the key ideas that are most relevant for understanding and interviews.
+
+Important Points from rte_eal_init()
+1. Purpose
+	• rte_eal_init() initializes the Environment Abstraction Layer (EAL).
+	• It prepares the DPDK runtime environment before packet processing starts.
+	• It must be called at the beginning of the application.
+
+2. Where It Must Be Called
+	• Must be executed in the main() function.
+	• Must run on the MAIN lcore (core 0).
+	• Should be called as early as possible in the program.
+Example:
+int main(int argc, char **argv)
+{
+    int ret = rte_eal_init(argc, argv);
+}
+
+3. Worker Core Behavior
+After calling rte_eal_init():
+	• Worker lcores are initialized
+	• Worker cores are placed into a WAIT state
+	• They remain idle until launched using:
+rte_eal_remote_launch()
+or
+rte_eal_mp_remote_launch()
+
+4. Arguments (argc, argv)
+argc
+	• Number of command-line arguments.
+	• Must be ≥ 0.
+argv
+	• Array of argument strings.
+	• EAL may modify these arguments during parsing.
+Important:
+argv[0] remains unchanged
+But:
+argv[1] ... argv[ret-1] may be modified
+
+5. Return Value
+Success
+Returns:
+number of parsed arguments (>= 0)
+Example:
+ret = 5
+Meaning:
+first 5 arguments were consumed by EAL
+Application arguments start from:
+argv[ret]
+
+Failure
+Returns:
+-1
+Error reason stored in:
+rte_errno
+
+6. Memory Ownership
+EAL does NOT take ownership of argv memory.
+Meaning:
+	• Application still owns:
+		○ argv
+		○ argument strings
+EAL only parses and modifies them.
+
+7. Common Error Codes (rte_errno)
+EACCES
+Permission issue.
+Example:
+	• No permission for hugepages
+	• Cannot access devices
+
+EAGAIN
+Temporary resource issue.
+Example:
+	• System resource unavailable
+	• Setup may be retried
+
+EALREADY
+rte_eal_init() already called once.
+Important rule:
+EAL initialization can only happen once.
+
+EFAULT
+Tail queue configuration not found in memory.
+Usually indicates:
+shared memory configuration problem
+
+EINVAL
+Invalid parameters.
+Example:
+argc / argv incorrect
+
+ENOMEM
+Out-of-memory condition.
+Example:
+Hugepage allocation failure
+
+ENODEV
+Device or memory setup failure.
+
+ENOTSUP
+System does not support DPDK EAL.
+Example:
+Unsupported OS configuration
+
+EPROTO
+PCI bus issue.
+Example:
+PCI bus not present
+PCI bus unreadable
+
+ENOEXEC
+Service core failed to launch.
+
+8. What Happens Internally During EAL Init
+When rte_eal_init() runs, it performs several critical tasks:
+	1. Parses EAL command-line arguments
+	2. Initializes hugepage memory
+	3. Sets up lcore configuration
+	4. Initializes PCI devices
+	5. Sets up memory zones and mempools
+	6. Initializes timers and interrupts
+	7. Initializes drivers
+	8. Launches service cores
+
+9. Typical EAL Arguments
+Example command:
+./app -l 0-3 -n 4 -- -p 3
+Explanation:
+-l 0-3   -> cores used by DPDK
+-n 4     -> memory channels
+--       -> end of EAL args
+-p 3     -> application argument
+rte_eal_init() parses everything before --.
+
+10. Key Interview Points (Very Important)
+You should remember:
+	1. Initializes DPDK environment
+	2. Must run on MAIN lcore
+	3. Must be called first in main()
+	4. Parses EAL command line arguments
+	5. Initializes hugepages, devices, and cores
+	6. Worker cores go to WAIT state
+	7. Returns number of parsed arguments
+	8. Can only be called once
+
+✅ One-line summary
+rte_eal_init() initializes the DPDK runtime environment, parses EAL arguments, sets up memory/devices/cores, and prepares worker lcores for packet processing.
+
+
+
+rte_eal_init
+ ├── eal_parse_args
+ ├── eal_cpu_init
+ ├── eal_hugepage_info_init
+ ├── eal_memory_init
+ ├── rte_config_init
+ ├── eal_thread_init
+ ├── rte_eal_timer_init
+ ├── rte_bus_scan
+ ├── rte_bus_probe
+ ├── rte_service_init
+  └── telemetry/log init

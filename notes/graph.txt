@@ -1,0 +1,75 @@
+                                            ====================================
+                                                What is Graph in DPDK?
+                                            ====================================
+
+                            A Graph in DPDK is:
+
+                            A high-performance packet processing model where packets move through interconnected nodes,
+                            and each node performs a specific task.
+
+
+                                            ====================================
+                                                Why Graph Was Introduced ?
+                                            ====================================
+
+
+                            Earlier in DPDK, packet processing was typically written in:
+
+                            while(1) loops
+
+                            Manual function calls
+
+                            Hardcoded pipelines 
+
+
+                Problems:
+
+                            Monolithic
+
+                            Hard to scale
+
+                            Hard to reuse logic                                          
+
+
+
+                                            ====================================
+                                                How Graph Works Internally ?
+                                            ====================================
+
+                            Node - process packets , decides next node , pushesforwards
+
+                            Edges - decides which node connects to which
+
+                            Scheduler - uses Topological Order , uses Ready Queue if packets presents
+
+
+                                            ====================================
+                                                Graph in DPDK vs VPP ?
+                                            ====================================
+
+
+                            | DPDK Graph          | VPP Graph                |
+                            | ------------------- | ------------------------ |
+                            | Library inside DPDK | Core architecture of VPP |
+                            | Optional framework  | Mandatory architecture   |
+                            | Simpler scheduling  | More advanced scheduler  |
+
+
+                                            ====================================
+                                                      Use of Graph ?
+                                            ====================================
+
+                                                        Software routers
+
+                                                        Firewalls
+
+                                                        Load balancers
+
+                                                        IPS/IDS
+
+                                                        Telecom packet core
+
+                                                        5G UPF
+
+                                                        Cloud networking
+
