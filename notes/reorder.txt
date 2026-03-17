@@ -78,7 +78,8 @@ reorder buffer , seq. no. , sliding window
 
 ---------------------------------------------------------------------------------------------------------------
 
-In TCP, the sequence number (seq) tells the position of the first byte of data in the TCP data stream. It helps the receiver place packets in the correct order.
+In TCP, the sequence number (seq) tells the position of the first byte of data in the TCP data stream.
+It helps the receiver place packets in the correct order.
 
 Your example:
 

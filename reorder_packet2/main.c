@@ -10,7 +10,7 @@
 
 #define NUM_MBUFS 1024
 #define MBUF_CACHE_SIZE 32
-#define REORDER_SIZE 8
+#define REORDER_SIZE 4
 #define BURST 32
 
 
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 
     printf("Simulating out-of-order packet arrival:\n");
 
-    uint32_t arrival_seq[] = {15, 18, 16, 17, 20};
+    uint32_t arrival_seq[] = {10,35,11,12};
 
     for (i = 0; i < sizeof(arrival_seq) / sizeof(arrival_seq[0]); i++) {
         struct rte_mbuf *m = create_packet(mbuf_pool, arrival_seq[i]);

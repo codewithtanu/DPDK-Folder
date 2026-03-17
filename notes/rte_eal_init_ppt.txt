@@ -1,0 +1,780 @@
+=================================================================================================
+
+internal_config
+                    Example arguments:
+
+                    -l 0-3
+                    -n 4
+                    --socket-mem
+                    --huge-dir
+                    --no-huge
+     ↓
+stores user input (command line arguments)
+
+rte_config
+
+                Important fields inside struct rte_config include:
+
+                Field	Meaning
+                master_lcore	ID of the main lcore
+                lcore_count	Number of enabled cores
+                process_type	Primary or secondary process
+                mem_config	Memory configuration
+                iova_mode	IOVA addressing mode
+
+     ↓
+stores final runtime system configuration
+
+
+
+=================================================================================================
+
+Simple Analogy
+
+Think of rte_eal_init() like booting an operating system.
+
+You cannot boot the OS twice inside the same process.
+
+First call → system starts
+Second call → system already running → error
+8. One-Line Explanation (Good for Slides)
+
+rte_eal_init() is allowed to run only once because it performs global initialization 
+of memory, devices, and threads for the entire DPDK runtime environment.
+
+
+=================================================================================================
+
+eal_save_args() → saves the original command-line arguments
+
+eal_collate_args() → separates and organizes EAL arguments from application arguments
+
+Error handling ensures invalid arguments stop initialization.
+
+
+=================================================================================================
+
+1. MMU Check (eal_mmu_supported())
+What the MMU is
+
+The Memory Management Unit (MMU) is hardware in the CPU that translates:
+
+Virtual Address → Physical Address
+
+Modern operating systems use virtual memory, so applications never directly access physical memory.
+
+Example:
+
+Application address : 0x7ffd12340000
+MMU translates      : 0x3a001234000
+Why DPDK checks MMU support
+
+DPDK relies heavily on:
+
+hugepage memory
+
+memory mapping (mmap)
+
+DMA access for NIC devices
+
+Without an MMU, these things cannot work.
+
+For example:
+
+NIC DMA → physical memory
+
+But the application sees:
+
+virtual memory
+
+The MMU (and sometimes IOMMU) allows the mapping.
+
+So DPDK verifies:
+
+Does the architecture support the required memory mapping model?
+What eal_mmu_supported() checks
+
+The function checks whether the system supports IOVA addressing modes.
+
+Two main modes exist:
+
+Mode	Meaning
+IOVA = PA	device sees physical addresses
+IOVA = VA	device sees virtual addresses
+
+DPDK must ensure that one of these works correctly.
+
+Internally the function checks:
+
+architecture type
+memory translation mode
+kernel support
+
+If unsupported:
+
+EAL: unsupported MMU type
+
+Initialization stops.
+
+
+=================================================================================================
+
+
+rte_eal_cpu_init() ->
+This function:
+
+1️⃣ Checks all possible CPUs (0–127)
+2️⃣ Finds which CPUs exist
+3️⃣ Marks them as DPDK worker cores (ROLE_RTE)
+4️⃣ Assigns CPU affinity
+5️⃣ Finds NUMA socket for each core
+6️⃣ Stores everything in global configuration
+
+=================================================================================================
+
+📌 Simple summary of the function
+
+eal_parse_args() reads all DPDK command-line options and configures:
+
+Process type
+
+Allowed/blocked devices
+
+Drivers and plugins
+
+CPU cores to use
+
+Service cores
+
+Main lcore
+
+Memory configuration
+
+Hugepage settings
+
+Optional flags
+
+Final configuration validation
+
+=================================================================================================
+
+             rte_config_init()
+                    │
+            check process type
+              /             \
+        PRIMARY            SECONDARY
+           │                   │
+ create shared config     attach to config
+           │                   │
+ update memory config     wait for primary
+           │                   │
+      ready to run       check version
+                              │
+                       update internal config
+
+rte_config_init() initializes the global DPDK configuration, either by creating shared configuration for
+the primary process or attaching to it for secondary processes.
+
+
+=================================================================================================
+
+           Primary Process
+           ───────────────
+             shared memory
+                  │
+                  │
+         ┌────────┴────────┐
+         │                 │
+   Secondary A        Secondary B
+
+
+Control Messages
+(primary ↔ secondary)
+
+        via
+     mp_socket
+
+
+
+
+=================================================================================================
+
+7️⃣ Full flow example
+
+Primary process:
+
+rte_eal_init()
+   ↓
+create /var/run/dpdk/rte/config
+   ↓
+rte_ring_create("my_ring")
+   ↓
+memzone allocated
+   ↓
+memzone entry added to mem_config
+
+Secondary process:
+
+rte_eal_init()
+   ↓
+attach /var/run/dpdk/rte/config
+   ↓
+map hugepages
+   ↓
+rte_ring_lookup("my_ring")
+   ↓
+pointer to same ring
+8️⃣ Visual architecture
+Primary Process
+────────────────────
+create memzone
+create ring
+update mem_config
+        │
+        │ shared hugepage memory
+        ▼
+Secondary Process
+────────────────────
+attach mem_config
+lookup ring
+use same ring
+
+
+
+=================================================================================================
+
+Start
+  │
+  ▼
+Call hugepage_info_init()
+  │
+  ├── if failure → return -1
+  │
+  ▼
+Check internal_conf->no_shconf
+  │
+  ├── YES → return 0
+  │        (no shared memory mode)
+  │
+  └── NO
+       │
+       ▼
+Get pointer to hugepage_info[]
+       │
+       ▼
+Create shared memory
+create_shared_memory(eal_hugepage_info_path)
+       │
+       ├── if failed → return -1
+       │
+       ▼
+Copy hugepage_info[] to shared memory
+memcpy(tmp_hpi, hpi)
+       │
+       ▼
+Reset lock_descriptor = -1
+(for each hugepage_info entry)
+       │
+       ▼
+Unmap shared memory
+munmap(tmp_hpi)
+       │
+       ▼
+Return 0
+
+=================================================================================================
+
+Start
+  │
+  ▼
+Open shared memory
+open_shared_memory(eal_hugepage_info_path)
+  │
+  ├── if failed → return -1
+  │
+  ▼
+Copy shared hugepage info
+memcpy(hpi, tmp_hpi)
+  │
+  ▼
+Unmap shared memory
+munmap(tmp_hpi)
+  │
+  ▼
+Return 0
+
+=================================================================================================
+
+Start
+  │
+  │
+  ▼
+Check: internal_conf->memory == 0 ?
+(User did NOT specify memory size)
+  │
+  ├── No → Use user-specified memory → Continue initialization
+  │
+  ▼ Yes
+Check: internal_conf->force_numa == 0 ?
+(User did NOT configure NUMA memory)
+  │
+  ├── No → Use NUMA memory configuration → Continue initialization
+  │
+  ▼ Yes
+Check: internal_conf->no_hugetlbfs ?
+(User used --no-huge option)
+  │
+  ├── No → Memory will come from hugepages
+  │
+  ▼ Yes
+Assign default memory:
+MEMSIZE_IF_NO_HUGE_PAGE
+  │
+  ▼
+Default memory = 64 MB
+(normal Linux pages used)
+  │
+  ▼
+Continue EAL initialization
+
+=================================================================================================
+
+rte_eal_memzone_init() ->
+
+Start
+  │
+  ▼
+Get mem_config pointer
+  │
+  ▼
+Lock mem_config (write lock)
+  │
+  ▼
+Check process type
+  │
+  ├── PRIMARY
+  │      │
+  │      ▼
+  │  Initialize memzone array
+  │  (rte_fbarray_init)
+  │
+  └── SECONDARY
+         │
+         ▼
+   Attach to memzone array
+   (rte_fbarray_attach)
+  │
+  ▼
+Unlock mem_config
+  │
+  ▼
+Return status
+
+memzone table  → metadata about memory
+memzone memory → actual allocated memory
+
+
+=================================================================================================
+
+rte_eal_memory_init()=>
+Start
+  │
+  ▼
+Log: "Setting up physically contiguous memory"
+  │
+  ▼
+Initialize memseg subsystem
+(rte_eal_memseg_init)
+  │
+  ├── fail → return -1
+  │
+  ▼
+Initialize memory allocator
+(eal_memalloc_init)
+  │
+  ├── fail → return -1
+  │
+  ▼
+Check process type
+  │
+  ├── PRIMARY
+  │       │
+  │       ▼
+  │   Initialize hugepages
+  │   (rte_eal_hugepage_init)
+  │
+  └── SECONDARY
+          │
+          ▼
+      Attach hugepages
+      (rte_eal_hugepage_attach)
+  │
+  ├── fail → return -1
+  │
+  ▼
+Initialize memory device layer
+(rte_eal_memdevice_init)
+  │
+  ├── fail → return -1
+  │
+  ▼
+Return success
+
+
+
+
+=================================================================================================
+
+rte_eal_memseg_init()=>
+
+Start
+  │
+  ▼
+Increase open file limit
+(getrlimit / setrlimit)
+  │
+  ▼
+Check NUMA configuration
+  │
+  ▼
+Check process type
+  │
+  ├── PRIMARY
+  │      │
+  │      ▼
+  │  memseg_primary_init()
+  │
+  └── SECONDARY
+         │
+         ▼
+     memseg_secondary_init()
+  │
+  ▼
+Return
+
+
+
+
+=================================================================================================
+
+Detect worker cores
+        │
+        ▼
+For each worker core
+        │
+        ├─ create communication pipes
+        ├─ set state = WAIT
+        ├─ create worker thread
+        ├─ assign thread name
+        └─ bind thread to CPU core
+
+
+=================================================================================================
+
+Detect lcores                            lcore_config[1]
+      │                                  thread_id = pthread
+      │                                  cpuset = CPU1
+      │                                  state = WAIT
+      │                                  pipe_main2worker
+      │                                  pipe_worker2main
+      │
+      ▼
+Create worker threads
+      │
+      ▼
+Set state = WAIT
+      │
+      ▼
+Main thread sends work
+      │
+      ▼
+state = RUNNING
+      │
+      ▼
+Task completes
+      │
+      ▼
+state = WAIT again
+
+=================================================================================================
+
+Your statement:
+
+mempool gets memory from memzone and memzone gets from memsegs
+
+The corrected explanation is:
+
+mempool allocates memory from a memzone
+memzone allocates memory from DPDK heap
+heap is built on top of memsegs
+memsegs describe mapped hugepages
+
+So the full chain is:
+
+Hugepages
+   ↓
+memsegs (metadata describing mapped memory)
+   ↓
+heap allocator
+   ↓
+memzones
+   ↓
+mempools
+   ↓
+mbufs
+6. Visual Example
+
+Suppose you have one 2MB hugepage.
+
+Hugepage (2MB)
+        │
+        ▼
+memseg descriptor
+        │
+        ▼
+DPDK heap
+        │
+        ▼
+memzone "mempool0"
+        │
+        ▼
+mempool
+        │
+        ├ mbuf
+        ├ mbuf
+        └ mbuf
+7. One-Line Answer (Good for Viva)
+
+You can say:
+
+Mempools allocate memory from memzones, memzones reserve memory from the DPDK heap, and the heap is built
+ on top of memsegs which describe the hugepage memory mapped into the process.
+
+
+=================================================================================================
+
+Good question — this is the key concept of how DPDK accesses hugepage memory. Let’s explain it clearly.
+
+You asked:
+
+Hugepages are physical memory. They are mapped with what? And then memsegs store the mapping info?
+
+Yes — that idea is mostly correct. Let’s walk through the exact mapping chain.
+
+1. Where Hugepages Exist Initially
+
+When the system boots with:
+
+hugepages=1024 hugepagesz=2M
+
+the Linux kernel reserves physical memory.
+
+Example:
+
+Physical RAM
+│
+├─ Hugepage (2MB)  → Physical address 0x20000000
+├─ Hugepage (2MB)  → Physical address 0x20200000
+├─ Hugepage (2MB)
+└─ ...
+
+These are physical pages managed by the kernel.
+
+2. Hugepages Appear as Files in hugetlbfs
+
+Hugepages are exposed through the hugetlbfs filesystem.
+
+Example mount:
+
+/dev/hugepages
+
+DPDK creates files like:
+
+/dev/hugepages/rtemap_0
+/dev/hugepages/rtemap_1
+
+Each file corresponds to a hugepage-backed memory region.
+
+So now the chain becomes:
+
+Physical Hugepage
+        ↓
+hugetlbfs file
+3. DPDK Maps the Hugepage File Using mmap()
+
+Inside rte_eal_memory_init() DPDK does:
+
+mmap()
+
+Conceptually:
+
+virtual_addr = mmap(NULL, hugepage_size, ..., fd)
+
+This maps the hugepage file into the process virtual address space.
+
+Now the chain becomes:
+
+Physical Hugepage
+       ↓
+hugetlbfs file
+       ↓
+mmap()
+       ↓
+Virtual address in DPDK process
+
+Example:
+
+Physical: 0x20000000
+Virtual:  0x7f8000000000
+
+Now the application can access that memory.
+
+4. What Memseg Stores
+
+After mapping, DPDK creates a memseg descriptor.
+
+A memseg stores metadata about that mapped memory.
+
+Example memseg entry:
+
+memseg
+│
+├─ virtual_addr = 0x7f8000000000
+├─ phys_addr    = 0x20000000
+├─ length       = 2MB
+└─ socket_id    = 0
+
+So memseg stores:
+
+virtual address
+physical address
+size
+NUMA node
+
+This allows DPDK to manage the hugepage memory.
+
+5. Visualization of the Whole Flow
+Kernel reserves hugepages
+        │
+        ▼
+Physical hugepage (2MB)
+        │
+        ▼
+hugetlbfs file (/dev/hugepages/rtemap_0)
+        │
+        ▼
+mmap()
+        │
+        ▼
+Virtual address in DPDK process
+        │
+        ▼
+memseg descriptor created
+6. Why This Mapping Is Necessary
+
+Applications run in virtual memory, not physical memory.
+
+So DPDK must map hugepages into the process address space.
+
+Benefits:
+
+fast packet buffers
+DMA-capable memory
+NUMA awareness
+7. After Memsegs Are Created
+
+Then the memory hierarchy continues:
+
+Hugepages
+     ↓
+memsegs
+     ↓
+memzones
+     ↓
+mempools
+     ↓
+mbufs
+8. One-Sentence Answer (Good for Viva)
+
+You can say:
+
+Hugepages are reserved as physical memory by the Linux kernel, exposed through hugetlbfs files,
+ mapped into the DPDK process virtual address space using mmap(), and memseg structures store 
+ metadata describing these mapped memory regions.
+
+If you'd like, I can also show you the exact code inside DPDK where the mmap() happens and memsegs 
+are created, which will make this mapping process even clearer.
+
+=================================================================================================
+
+Hugepage Mapping Flow in DPDK
+
+Kernel reserves hugepages at boot time (e.g., hugepages=1024 hugepagesz=2M).
+These are contiguous physical memory pages.
+
+The kernel exposes these pages through the hugetlbfs filesystem (e.g., /dev/hugepages).
+
+DPDK opens these hugepage files and maps them into the process address space using the mmap() system call.
+
+After mapping, DPDK creates memseg descriptors that store metadata about each mapped memory segment, including:
+
+virtual address
+
+physical address
+
+page size
+
+NUMA socket
+
+These memsegs are then used to build higher-level memory structures:
+
+Hugepages
+   ↓
+memsegs
+   ↓
+memzones
+   ↓
+mempools
+   ↓
+mbufs / rings / other objects
+
+In short:
+Hugepages are physical memory reserved by the kernel, mapped into the DPDK application's virtual address space
+using mmap(), and memseg structures store the mapping information used to manage that memory.
+
+
+
+
+=================================================================================================
+
+
+
+
+=================================================================================================
+
+
+
+
+=================================================================================================
+
+
+
+
+=================================================================================================
+
+
+
+
+=================================================================================================
+
+
+
+=================================================================================================
+
+
+
+=================================================================================================
+
+
+
+=================================================================================================

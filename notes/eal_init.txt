@@ -1,5 +1,6 @@
 
-Here are the important points extracted from the documentation of rte_eal_init() in DPDK. I’ve condensed the key ideas that are most relevant for understanding and interviews.
+Here are the important points extracted from the documentation of rte_eal_init() in DPDK. I’ve condensed the key ideas
+that are most relevant for understanding and interviews.
 
 Important Points from rte_eal_init()
 1. Purpose
@@ -146,7 +147,8 @@ You should remember:
 	8. Can only be called once
 
 ✅ One-line summary
-rte_eal_init() initializes the DPDK runtime environment, parses EAL arguments, sets up memory/devices/cores, and prepares worker lcores for packet processing.
+rte_eal_init() initializes the DPDK runtime environment, parses EAL arguments,
+ sets up memory/devices/cores, and prepares worker lcores for packet processing.
 
 
 
