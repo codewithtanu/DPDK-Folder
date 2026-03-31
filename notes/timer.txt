@@ -1,0 +1,183 @@
+In DPDK, a timer is a mechanism used to execute a function (callback) after a specific time interval
+ or periodically, without blocking the CPU.
+
+But to really understand it deeply, let’s break it down clearly 👇
+
+🔹 What is a Timer in DPDK?
+
+A DPDK timer allows you to:
+
+Schedule a function to run later
+Run something periodically
+Do tasks without stopping packet processing
+
+👉 Think of it like:
+
+“Run this function after 5 seconds” OR “Run this every 1 second”
+
+🔹 Why DPDK Needs Timers?
+
+DPDK is:
+
+Poll-based (no interrupts)
+Runs in busy loop (while(1))
+Designed for high-speed packet processing
+
+So:
+
+You cannot use normal OS timers easily (like sleep(), signals)
+Blocking = ❌ BAD (kills performance)
+
+👉 Therefore DPDK provides its own high-performance timer subsystem
+
+🔹 Real-Life Use Cases
+
+Timers are used in:
+
+1. Network Protocols
+ARP cache timeout
+TCP retransmission timers
+DHCP lease renewal
+2. Periodic Tasks
+Stats printing every second
+Health monitoring
+Cleanup of expired sessions
+3. Delayed Execution
+Retry sending packets
+Timeout handling
+🔹 How DPDK Timer Works (Concept)
+
+DPDK uses:
+
+CPU cycle counter (TSC – Time Stamp Counter)
+High precision timing based on CPU clock
+
+👉 Instead of milliseconds, DPDK uses:
+
+ticks = rte_get_timer_hz()  // cycles per second
+🔹 Core Components
+1. Timer Structure
+struct rte_timer timer;
+2. Initialize Timer Subsystem
+rte_timer_subsystem_init();
+
+👉 Must be called once before using timers
+
+3. Initialize Timer
+rte_timer_init(&timer);
+4. Reset (Start) Timer
+rte_timer_reset(
+    &timer,
+    ticks,                  // time interval
+    SINGLE or PERIODICAL,   // type
+    lcore_id,               // CPU core
+    callback_function,
+    arg
+);
+5. Manage Timers (IMPORTANT 🔥)
+rte_timer_manage();
+
+👉 This must be called inside your loop:
+
+while (1) {
+    process_packets();
+    rte_timer_manage();  // checks & executes timers
+}
+
+💡 Without this → timers will NEVER fire
+
+🔹 Timer Modes
+1. One-shot Timer
+
+Runs only once
+
+RTE_TIMER_SINGLE
+
+👉 Example:
+
+Timeout after 5 seconds
+2. Periodic Timer
+
+Runs repeatedly
+
+RTE_TIMER_PERIODICAL
+
+👉 Example:
+
+Print stats every second
+🔹 Example Code
+#include <rte_timer.h>
+
+void timer_cb(struct rte_timer *tim, void *arg) {
+    printf("Timer triggered!\n");
+}
+
+int main() {
+    struct rte_timer timer;
+
+    rte_timer_subsystem_init();
+    rte_timer_init(&timer);
+
+    uint64_t hz = rte_get_timer_hz();
+
+    rte_timer_reset(
+        &timer,
+        hz,  // 1 second
+        RTE_TIMER_PERIODICAL,
+        rte_lcore_id(),
+        timer_cb,
+        NULL
+    );
+
+    while (1) {
+        rte_timer_manage();
+    }
+}
+🔹 Important Concepts (VERY IMPORTANT 🔥)
+✅ Non-blocking
+Timer does NOT stop execution
+Runs alongside packet processing
+✅ Runs on Specific Core
+Timer is tied to a lcore
+Callback runs on that core
+✅ Cooperative Execution
+Timer runs ONLY when rte_timer_manage() is called
+
+👉 This is VERY important:
+
+DPDK does NOT automatically trigger timers
+
+✅ High Precision
+Uses CPU cycles → very fast and accurate
+🔹 Internal Working (Deep Insight)
+You set a timer with expiry time (in CPU ticks)
+Timer is stored in a timer list
+rte_timer_manage():
+Checks current TSC
+Compares with timer expiry
+Executes callback if expired
+🔹 Difference from OS Timers
+Feature	OS Timer	DPDK Timer
+Blocking	Yes	No
+Interrupt-based	Yes	No
+Precision	Medium	Very High
+Performance	Lower	Very High
+Control	OS	User-managed
+🔹 Simple Analogy
+
+Imagine:
+
+Your main loop = a worker constantly processing packets
+Timer = a reminder note
+
+Instead of stopping work:
+
+Worker quickly checks notes (rte_timer_manage())
+If time reached → executes task
+🔹 Key Takeaways
+
+✔ DPDK timers are non-blocking high-speed timers
+✔ Based on CPU cycles (TSC)
+✔ Require manual calling of rte_timer_manage()
+✔ Used for timeouts, periodic tasks, retries
+✔ Critical in network protocol implementation
